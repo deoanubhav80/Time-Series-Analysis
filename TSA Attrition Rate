@@ -1,0 +1,487 @@
+# **Step 1: Import Libraries**
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+plt.figure(figsize=(12,5))
+# **Step 2: Load Time Series Data from Excel**
+file_path = "/content/drive/MyDrive/Colab Notebooks/TSA_Batch 2025-27/monthly_sales_time_series_5_years.xlsx"
+ts = pd.read_excel(file_path)
+
+ts.head(20)
+#**Interpretation & Action:**
+
+#Raw data loaded
+
+#Time variable is not yet a time series index
+# **Step 3: Convert Date Column to Datetime & Set Index**
+ts['Date'] = pd.to_datetime(ts['Date'])
+ts.set_index('Date', inplace=True)
+
+ts.info()
+#**Why this code?**
+
+#Time series models require DatetimeIndex
+
+#**Interpretation & Action**
+
+#Index is now monthly datetime
+
+#Sales has missing values → must be handled
+# **Step 4: Initial Time Series Plot (Visual EDA)**
+plt.plot(ts.index, ts['Sales'], marker='o')
+plt.title("Monthly Sales Time Series (Raw Data)")
+plt.xlabel("Date")
+plt.ylabel("Sales")
+plt.grid(True)
+plt.show()
+
+#**Interpretation & Action**
+
+#Clear upward trend
+
+#Repeating seasonality
+
+#Visible gaps (missing values)
+
+#Action: Investigate and treat missing data
+# **Step 5: Missing Value Count**
+ts.isna().sum()
+
+#**Interpretation & Action**
+
+#Few missing observations
+
+#Interpolation is acceptable
+
+#No need to drop data
+# **Step 6: Visualize Missing Values**
+sns.heatmap(ts.isna(), cbar=False, yticklabels=False)
+plt.title("Missing Value Heatmap")
+plt.show()
+
+#**Why this code?**
+
+#Identifies whether missing values are random or patterned
+
+#**Interpretation & Action**
+
+#Missing values are randomly scattered
+
+#Safe to use time-based interpolation
+# **Step 7: Treat Missing Values (Time Interpolation)**
+ts_interpolated = ts.interpolate(method='linear')
+
+#**Why this code?**
+
+#Linear interpolation respects trend & seasonality
+
+#Better than mean/median for time series
+
+#**Interpretation & Action**
+
+#Missing values filled smoothly
+
+#Data integrity preserved
+# **Step 8: Validate Missing Value Treatment**
+plt.plot(ts_interpolated.index, ts_interpolated['Sales'], label='Interpolated')
+plt.scatter(ts.index, ts['Sales'], color='red', label='Original', zorder=3)
+plt.legend()
+plt.title("Sales After Missing Value Treatment")
+plt.show()
+#**Interpretation & Action**
+
+#No artificial jumps introduced
+
+#Proceed confidently to deeper EDA
+# **Step 9: Distribution Analysis (Ignoring Time Temporarily)**
+sns.histplot(ts_interpolated['Sales'], kde=True)
+plt.title("Distribution of Sales")
+plt.show()
+#**Why this code?**
+
+#Checks skewness and extreme values
+
+#Helps decide transformations
+
+#**Interpretation & Action**
+
+#Distribution is near-normal
+
+#No transformation required
+
+#If skewed → log/sqrt transform
+# **Step 10: Time Series Decomposition**
+
+
+from statsmodels.tsa.seasonal import seasonal_decompose
+
+decomposition = seasonal_decompose(ts_interpolated['Sales'], model='additive', period=12)
+decomposition.plot()
+plt.show()
+
+#**Why this code?**
+
+#Separates:
+#Trend
+#Seasonality
+#Residual (noise)
+
+#**Interpretation & Action**
+
+#Trend: steadily increasing
+
+#Seasonality: stable yearly pattern
+
+#Residuals: mostly random
+
+#Additive model is appropriate
+# **Step 11: Rolling Statistics (Stationarity Insight)**
+rolling_mean = ts_interpolated['Sales'].rolling(window=12).mean()
+rolling_std = ts_interpolated['Sales'].rolling(window=12).std()
+
+plt.plot(ts_interpolated['Sales'], label='Original')
+plt.plot(rolling_mean, label='Rolling Mean')
+plt.plot(rolling_std, label='Rolling Std')
+plt.legend()
+plt.title("Rolling Mean & Standard Deviation")
+plt.show()
+
+#**Why this code?**
+
+#Visual intuition for stationarity
+
+#**Interpretation & Action**
+
+#Mean changes over time → non-stationary
+
+#Variance mostly stable
+
+#Differencing required
+# **Step 12: Stationarity Test (ADF Test)**
+from statsmodels.tsa.stattools import adfuller
+
+adf_result = adfuller(ts_interpolated['Sales'])
+
+print(f"ADF Statistic: {adf_result[0]}")
+print(f"p-value: {adf_result[1]}")
+#**Why this code?**
+
+#Statistical confirmation of stationarity
+
+#**Interpretation & Action**
+
+#p-value > 0.05 → non-stationary
+
+#Apply differencing before ARIMA/SARIMA
+# **Step 13: Final EDA Summary (Markdown Cell)**
+#**EDA Conclusions**
+
+#Monthly sales data with trend and seasonality,
+
+#Missing values handled using time interpolation,
+
+#Series is non-stationary
+
+#**Next Actions**
+
+#Apply first differencing
+
+#Use SARIMA (seasonality exists)
+
+#Validate forecasts with business cycles
+ts_diff = ts_interpolated['Sales'].diff().dropna()
+
+print("ADF Test on Differenced Series:")
+adf_result_diff = adfuller(ts_diff)
+
+print(f"ADF Statistic: {adf_result_diff[0]}")
+print(f"p-value: {adf_result_diff[1]}")
+
+if adf_result_diff[1] <= 0.05:
+    print("Conclusion: The differenced series is stationary (p-value <= 0.05)")
+else:
+    print("Conclusion: The differenced series is still non-stationary (p-value > 0.05)")
+# **Step 14: Time Series Decomposition of Differenced Data**
+from statsmodels.tsa.seasonal import seasonal_decompose
+
+# For the differenced data, the concept of 'period' might be different.
+# If seasonal differencing was applied, the seasonality would be removed.
+# Assuming a standard first differencing here, let's still decompose to see patterns.
+# If there is remaining seasonality, it will show up.
+# Adjust 'period' if you know the exact seasonal cycle of the differenced series, or remove if not relevant.
+
+# It's important to consider if seasonal_decompose is appropriate for a differenced series.
+# If the original series had a strong seasonality and it was addressed by differencing,
+# then seasonal_decompose on 'ts_diff' might not show clear seasonality.
+# However, it's a good check to see if any periodic patterns remain.
+
+# Let's try with the original period of 12 for the differenced series.
+# If the result is not meaningful, we might need to reconsider.
+decomposition_diff = seasonal_decompose(ts_diff, model='additive', period=12, extrapolate_trend='freq')
+decomposition_diff.plot()
+plt.show()
+# **Step 15: Split Data into Training and Testing Sets**
+split_ratio = 0.8
+split_point = int(len(ts_diff) * split_ratio)
+
+train_data = ts_diff.iloc[:split_point]
+test_data = ts_diff.iloc[split_point:]
+
+print(f"Training data shape: {train_data.shape}")
+print(f"Testing data shape: {test_data.shape}")
+#**Why this code?**
+
+#*   **Chronological Split:** For time series, data must be split sequentially to ensure the model learns from past data and predicts future data, mimicking real-world scenarios.
+#*   **`iloc`:** Used for integer-location based indexing, perfect for slicing data by row number.
+
+#**Interpretation & Action**
+
+#*   The `train_data` now contains the first 80% of your time series, and `test_data` contains the remaining 20%.
+#*   These datasets are ready for model fitting and evaluation respectively.
+plt.figure(figsize=(12, 6))
+plt.plot(train_data.index, train_data.values, label='Training Data', color='blue')
+plt.plot(test_data.index, test_data.values, label='Testing Data', color='orange')
+plt.title('Training and Testing Data Split (Differenced Series)')
+plt.xlabel('Date')
+plt.ylabel('Differenced Sales')
+plt.legend()
+plt.grid(True)
+plt.show()
+## **EDA Summary and Model Recommendation**
+
+### **Summary of Steps Performed So Far:**
+
+#1.  **Data Loading & Initial Setup:**
+#    *   Loaded monthly sales time series data.
+#    *   Converted 'Date' column to datetime and set as index.
+
+#2.  **Missing Value Handling:**
+#    *   Identified 5 missing values in 'Sales' column.
+#    *   Confirmed random scattering of missing values via heatmap.
+#    *   Treated missing values using **linear interpolation**, creating `ts_interpolated`.
+
+#3.  **Initial Data Exploration:**
+#    *   **Initial time series plot** showed clear upward trend and yearly seasonality.
+#    *   **Distribution analysis (histogram)** of interpolated data was near-normal, requiring no transformations.
+
+#4.  **Time Series Decomposition:**
+#    *   **Seasonal decomposition** confirmed a strong, steadily increasing **trend** and a stable, **additive seasonal pattern** (period=12).
+
+#5.  **Stationarity Analysis:**
+#    *   **Rolling statistics** indicated non-stationarity.
+#    *   **Augmented Dickey-Fuller (ADF) test** on original series confirmed non-stationarity (p-value > 0.05).
+
+#6.  **Differencing for Stationarity:**
+#    *   Applied **first-order differencing** to create `ts_diff`.
+#    *   **ADF test on `ts_diff`** confirmed stationarity (p-value = 7.95e-12).
+#    *   Seasonal decomposition on `ts_diff` showed a flatter trend.
+
+#7.  **Data Splitting:**
+#    *   Split the stationary `ts_diff` data into **training (80%) and testing (20%) sets** chronologically.
+#    *   A visual plot confirmed the data split.
+
+### **Recommended Time Series Model: SARIMA**
+
+#Given the data characteristics, a **Seasonal AutoRegressive Integrated Moving Average (SARIMA) model** is most appropriate because:
+
+#1.  **Seasonality:** The data clearly exhibits a strong yearly seasonal pattern (period = 12 months) that SARIMA can explicitly model.
+#2.  **Trend & Stationarity:** The original series' trend and non-stationarity were addressed by **first-order differencing (`d=1`)**, which is handled by the 'Integrated' (I) component of SARIMA.
+#3.  **AR and MA Components:** SARIMA can effectively model the remaining autocorrelations (AR) and moving average errors (MA) in both the non-seasonal and seasonal parts of the stationary series.
+
+#Therefore, a SARIMA model of the form **SARIMA(p, d, q)(P, D, Q)m** (with `d=1` and `m=12`) is recommended for robust forecasting.
+# **Step 15: Fit SARIMA Model**
+from statsmodels.tsa.statespace.sarimax import SARIMAX
+
+# train_data and test_data were created from ts_diff which is already first-differenced
+# Therefore, the non-seasonal differencing 'd' in SARIMA should be 0.
+
+order = (1, 0, 0)
+
+# (P, D, Q, m) - seasonal orders
+# P: seasonal AR order
+# D: seasonal differencing order (1, typically used to remove seasonal trend, still needed)
+# Q: seasonal MA order
+# m: number of periods in a season (12 for monthly data, yearly season)
+seasonal_order = (0, 1, 0, 12) # Based on ACF cutting off at seasonal lag 12 and previous iteration
+
+# Fit the SARIMA model
+print(f"\nFitting SARIMA model with order={order} and seasonal_order={seasonal_order} on {len(train_data)} training observations...")
+sarima_model = SARIMAX(train_data, order=order, seasonal_order=seasonal_order,
+                        enforce_stationarity=False, enforce_invertibility=False) # Set to False for robustness if issues arise
+sarima_results = sarima_model.fit(disp=False) # disp=False to suppress convergence output
+
+print("\nSARIMA Model Summary:")
+print(sarima_results.summary())
+
+# Store the fitted model and test set for future use (e.g., forecasting, evaluation)
+# Using %store for persistence across Colab sessions
+#%store sarima_results
+#%store test_data
+### **Interpretation & Action:**
+
+#This `SARIMA(1,0,0)(0,1,0,12)` model shows:
+
+#*   **Statistically Significant Coefficients:** The `ar.L1` (non-seasonal AR(1)) coefficient has a p-value of `0.004`, and `sigma2` has a p-value of `0.000`, both indicating statistical significance. This means these components are reliably contributing to the model.
+#*   **Good Residual Diagnostics:**
+#    *   **Ljung-Box (Q) (Prob: 0.23):** The p-value is > 0.05, indicating that the residuals are **white noise**, meaning no significant autocorrelation remains, and the model has captured the underlying patterns.
+#    *   **Jarque-Bera (JB) (Prob: 0.46):** The p-value is > 0.05, suggesting the residuals are **approximately normally distributed**.
+#    *   **Heteroskedasticity (H) (Prob: 0.69):** The p-value is > 0.05, indicating **no significant heteroskedasticity** (constant variance).
+
+#**Conclusion:** This model is well-specified, with significant parameters and well-behaved residuals. It effectively captures the patterns in the differenced series. This confirms that our chosen model orders are appropriate. The warnings from previous iterations regarding 'too few observations' are no longer present, which is a good sign for parameter estimation reliability.
+
+#**Next Action:** Proceed with forecasting using this fitted model, as the model fitting and interpretation are now complete and robust.
+# **Step 16: Forecast with the Fitted SARIMA Model**
+import matplotlib.pyplot as plt
+
+# Get the last date from the training data
+last_train_date = train_data.index[-1]
+
+# Get the start and end dates for the forecast (which is the test data period)
+start_forecast_date = test_data.index[0]
+end_forecast_date = test_data.index[-1]
+
+# Generate predictions (forecasts) over the test data period
+# The 'dynamic=False' means that the one-step-ahead forecasts are produced using the true prior values.
+# If dynamic=True, the model uses its own previous forecasts for future predictions.
+forecast_diff = sarima_results.predict(start=start_forecast_date, end=end_forecast_date)
+
+# Plot the training data, test data, and forecasts
+plt.figure(figsize=(14, 7))
+plt.plot(train_data.index, train_data, label='Training Data (Differenced)', color='blue')
+plt.plot(test_data.index, test_data, label='Actual Test Data (Differenced)', color='orange')
+plt.plot(forecast_diff.index, forecast_diff, label='SARIMA Forecast (Differenced)', color='green', linestyle='--')
+
+plt.title('SARIMA Forecast vs. Actuals (Differenced Sales)')
+plt.xlabel('Date')
+plt.ylabel('Differenced Sales')
+plt.legend()
+plt.grid(True)
+plt.show()
+#The `SARIMA` forecast has been generated and plotted against the actual differenced test data. This visualization helps in a preliminary assessment of how well the model's predictions align with the actual values. We can observe the forecast trend and how closely it follows the true test data.
+
+### **Interpretation & Action:**
+#*   **Visual Assessment:** Observe how closely the green dashed line (forecast) follows the orange line (actual test data). A good fit indicates the model is capturing the patterns well.
+#*   **Next Action:** Quantify the model's performance using appropriate evaluation metrics to get an objective measure of its accuracy.
+# **Step 17: Evaluate Model Performance**
+from sklearn.metrics import mean_squared_error, mean_absolute_error
+import numpy as np
+
+# Calculate evaluation metrics
+mse = mean_squared_error(test_data, forecast_diff)
+rmse = np.sqrt(mse)
+mae = mean_absolute_error(test_data, forecast_diff)
+
+print(f'Mean Squared Error (MSE): {mse:.4f}')
+print(f'Root Mean Squared Error (RMSE): {rmse:.4f}')
+print(f'Mean Absolute Error (MAE): {mae:.4f}')
+### **Interpretation & Action:**
+
+#*   **Mean Squared Error (MSE):** Measures the average of the squares of the errors. Larger errors are penalized more heavily.
+#*   **Root Mean Squared Error (RMSE):** The square root of the MSE, providing an error measure in the same units as the target variable. It's often preferred over MSE for interpretability.
+#*   **Mean Absolute Error (MAE):** Measures the average of the absolute errors. It's less sensitive to outliers than MSE or RMSE.
+
+#**What these values mean:**
+#*   Lower values for all three metrics (MSE, RMSE, MAE) indicate a better-performing model. The specific "good" value depends on the scale of your data. Since our data (`ts_diff`) represents the monthly change in sales, these error metrics reflect the average prediction error in terms of these monthly changes.
+
+#**Next Action:**
+#*   The next step would typically involve **inverting the differencing** to get the forecasts in the original scale of 'Sales' and then evaluating the model in that context. This is important because business decisions are usually made on actual sales values, not their differences. However, the user asked to redo model fitting for SARIMA and give interpretation which has been completed. I will be awaiting further instructions from the user.
+# **Step 18: Invert Differencing to Original Scale**
+# To invert the differencing, we need the last value of the original interpolated series before differencing.
+# ts_diff was created from ts_interpolated['Sales'].diff().dropna()
+# So, to reverse ts_diff, we need ts_interpolated['Sales'].iloc[-len(test_data)-1]
+
+# Get the last value of the original interpolated series before the differencing for the test period started
+# The split point was applied to ts_diff, which is already differenced.
+# So, train_data is ts_diff.iloc[:split_point]
+# The value we need to add back to the first forecast_diff value is the last value of ts_interpolated['Sales'] that was *before* the first value of test_data.
+
+# Let's get the original ts_interpolated values for the period corresponding to the train_data and test_data
+original_series_for_inversion = ts_interpolated['Sales'].loc[train_data.index[0]:]
+
+# The first value in the `test_data` is `ts_diff.iloc[split_point]`.
+# To get the original value that `ts_diff.iloc[split_point]` was differenced from,
+# we need `ts_interpolated['Sales'].loc[ts_diff.index[split_point]-1]` (this is wrong as index is DatetimeIndex)
+# We need the value of ts_interpolated['Sales'] at the date IMMEDIATELY PRECEDING the first date of `test_data`.
+
+# The original series corresponding to `ts_diff` starts at `ts_interpolated.index[1]`
+# because `ts_diff` is `ts_interpolated.diff().dropna()`
+# So, `ts_diff` starts at `2019-02-28`. `ts_interpolated` starts at `2019-01-31`.
+# The `split_point` is `47` on `ts_diff`.
+
+# The last date of train_data (which is part of ts_diff) is `ts_diff.index[split_point-1]`
+# We need the original ts_interpolated value corresponding to the date before ts_diff.index[split_point]
+
+last_value_of_original_train_data = ts_interpolated['Sales'].loc[train_data.index[-1]]
+
+# Reconstruct the forecasted series on the original scale
+# The first forecasted value needs to be added to the last known value of the original series that corresponds to the training period.
+forecast_original_scale = pd.Series(dtype='float64')
+current_value = last_value_of_original_train_data
+
+for i in range(len(forecast_diff)):
+    current_value += forecast_diff.iloc[i]
+    forecast_original_scale.loc[forecast_diff.index[i]] = current_value
+
+# Align the index with the test data index
+forecast_original_scale.index = test_data.index
+
+print("Forecast on Original Scale (first 5 values):")
+print(forecast_original_scale.head())
+### **Interpretation & Action:**
+
+#*   The `forecast_original_scale` Series now contains the predicted sales values in their original magnitude, rather than as differences. This makes the forecasts directly comparable to the actual sales figures.
+#*   This inversion is crucial for presenting results in a business-understandable format.
+
+#**Next Action:** Plot these original-scale forecasts against the actual `ts_interpolated` values for the test period to visually assess the model's performance.
+# **Step 19: Plot Forecasts on Original Scale**
+plt.figure(figsize=(14, 7))
+
+# Plot the full original interpolated series (training + actual test data)
+plt.plot(ts_interpolated['Sales'].loc[:train_data.index[-1]], label='Original Training Data', color='blue')
+plt.plot(ts_interpolated['Sales'].loc[test_data.index[0]:], label='Actual Test Data (Original Scale)', color='orange')
+
+# Plot the forecasted values on the original scale
+plt.plot(forecast_original_scale.index, forecast_original_scale, label='SARIMA Forecast (Original Scale)', color='green', linestyle='--')
+
+plt.title('SARIMA Forecast vs. Actuals (Original Sales Scale)')
+plt.xlabel('Date')
+plt.ylabel('Sales')
+plt.legend()
+plt.grid(True)
+plt.show()
+### **Interpretation & Action:**
+
+#*   This plot provides a clear visual assessment of how well the SARIMA model forecasts actual sales values.
+#*   Observe how closely the green dashed line (forecast) aligns with the orange line (actual test data). This is the most intuitive way to understand the model's predictive power for stakeholders.
+#*   We can see if the model captures the trend and seasonality in the original scale and how accurate the predictions are.
+
+#**Next Action:** Quantify the model's performance on the original scale using evaluation metrics.
+# **Step 20: Evaluate Model Performance on Original Scale**
+from sklearn.metrics import mean_squared_error, mean_absolute_error
+import numpy as np
+
+# Get the actual values from the original interpolated series for the test period
+actual_original_scale = ts_interpolated['Sales'].loc[test_data.index]
+
+# Calculate evaluation metrics for forecasts on original scale
+mse_original = mean_squared_error(actual_original_scale, forecast_original_scale)
+rmse_original = np.sqrt(mse_original)
+mae_original = mean_absolute_error(actual_original_scale, forecast_original_scale)
+
+print(f'Mean Squared Error (MSE) on Original Scale: {mse_original:.4f}')
+print(f'Root Mean Squared Error (RMSE) on Original Scale: {rmse_original:.4f}')
+print(f'Mean Absolute Error (MAE) on Original Scale: {mae_original:.4f}')
+### **Interpretation & Action:**
+
+#*   These metrics (MSE, RMSE, MAE) are now calculated on the original sales values. They provide a quantitative measure of the model's forecasting accuracy in the business-relevant context.
+#*   **RMSE (Original Scale):** This is typically the most interpretable metric for stakeholders, as it represents the average magnitude of the forecast errors in the same units as the original sales data. A lower RMSE indicates better predictive accuracy.
+#*   **MAE (Original Scale):** Similar to RMSE, but less sensitive to large errors.
+
+#**What these values mean:**
+#*   Compare these values to the scale of your sales data to understand their practical significance. For example, if your average sales are around 150-200 units, an RMSE of 10 might be acceptable, while an RMSE of 50 might indicate poor performance.
+
+#**Final Conclusion:**
+
+#We have successfully built, refined, forecasted, and evaluated a SARIMA model for the monthly sales data. The model was chosen due to its ability to handle both trend (through differencing) and seasonality. We identified appropriate model orders through ACF/PACF analysis and ensured the model's parameters were statistically significant and residuals were well-behaved. The forecasts are now presented and evaluated in the original sales scale for practical business insights. This completes the core time series forecasting task.
